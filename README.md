@@ -1,5 +1,3 @@
-Absolutely! Here's the documentation in markdown format for your README file:
-
 ## Simple Active Record ORM
 
 This is a simple Object-Relational Mapper (ORM) built using Ruby. It follows the Active Record design pattern and provides basic functionalities for interacting with a PostgreSQL database.
