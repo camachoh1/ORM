@@ -12,7 +12,7 @@ class ORM
   }
 
   # Connection object
-  @@connection = nil
+  @@db_connection = nil
 
   def self.establish_db_connection(adapter=@@defaultdb, db_name)
     adapter_class = get_adapter_class(adapter)
@@ -22,18 +22,19 @@ class ORM
   end
 
   def self.connect
-    if @@connection.nil?
+    if @@db_connection.nil?
       adapter_class = @@config[:adapter]
-      @@connection = adapter_class.connect(dbname: @@defaultdb)
+      @@db_connection = adapter_class.connect(dbname: @@defaultdb)
 
       if !self.db_exists?(@@config[:dbname])
-        @@connection.exec("CREATE DATABASE #{@@config[:dbname]};")
+        @@db_connection.exec("CREATE DATABASE \"#{@@config[:dbname]}\";")
         puts "Database '#{@@config[:dbname]}' created!"
       end
-      @@connection = adapter_class.connect(dbname: @@config[:dbname])
+
+      @@db_connection = adapter_class.connect(dbname: @@config[:dbname])
       puts "connected to database: '#{@@config[:dbname]}'"
     end
-    @@connection
+    @@db_connection
   end
 
   def self.create_table(table_name, data)
@@ -43,13 +44,18 @@ class ORM
 
     if !self.table_exist?(table_name)
     sql = <<~SQL
-    CREATE TABLE #{table_name} (
+    CREATE TABLE \"#{table_name}\" (
       id serial PRIMARY KEY,
       #{columns}
     );
     SQL
 
-    @@connection.exec_params(sql, [])
+    begin
+      result = @@db_connection.exec_params(sql, [])
+    rescue PG::Error => error
+      raise error
+    end
+
     p "Table '#{table_name}' Created!"
     else
       p "Table: '#{table_name}' Already Exist!"
@@ -65,14 +71,18 @@ class ORM
       col_data[:value]
     end
 
-    col_names = get_col_names(data)
+    col_names = format_col_names(data)
     
     sql = <<~SQL
       INSERT INTO \"#{table_name}\" (#{col_names.join(',')})
       VALUES (#{value_placeholders})
     SQL
 
-    @@connection.exec_params(sql, values)
+    begin
+      result = @@db_connection.exec_params(sql, values)
+    rescue PG::Error => error
+      raise error
+    end
 
     p "Records added to table: '#{table_name}'!"
   end
@@ -84,19 +94,16 @@ class ORM
       SELECT * FROM \"#{table_name}\"
     SQL
 
-    records = @@connection.exec_params(sql, [])
-    records = records.map do |rec|
-      res = {}
-      rec.each_pair do |key, value|
-        sym_key = key.to_sym
-        res[key] = value
-      end
-      res
+
+    begin
+      records = @@db_connection.exec_params(sql, [])
+    rescue PG::Error => error
+      raise error
     end
-    records
+    records = self.process_records(records)
   end
 
-  def self.first(table_name, limit=1) # get the first number of records expecified by the limit. They are returned in ascending order. If no limit specified, returns the first element in the collection. 
+  def self.first(table_name, limit=1)
     raise ArgumentError, "Invalid Table Name: #{table_name}" unless self.table_exist?(table_name) && is_valid_table_name?(table_name)
 
     sql = <<~SQL
@@ -105,27 +112,33 @@ class ORM
       LIMIT $1
     SQL
 
-    records = @@connection.exec_params(sql, [limit])
-    records = records.map do |rec|
-      res = {}
-      rec.each_pair do |key, value|
-        sym_key = key.to_sym
-        res[key] = value
-      end
-      res
+    begin
+      records = @@db_connection.exec_params(sql, [limit])
+    rescue PG::Error => error
+      raise error
     end
-    records
+    records = self.process_records(records)
   end
 
   def self.find_by(table_name,col_name, query)
     raise ArgumentError, "Invalid Table Name: #{table_name}" unless self.table_exist?(table_name) && is_valid_table_name?(table_name)
 
-    records = self.all(table_name)
-    records = records.select do |rec|
-      rec[col_name] == query
-    end[0]
+    sql = <<~SQL
+      SELECT * FROM \"#{table_name}\"
+      WHERE \"#{col_name}\" = $1
+      ORDER BY persons.id ASC
+      LIMIT 1
+    SQL
+
+    begin
+      records = @@db_connection.exec_params(sql, [query])
+    rescue PG::Error => error
+      raise error
+    end
+
+    records = process_records(records)
     
-    if !records
+    if records.size == 0
       "Unable to find provided data!"
     else 
       records
@@ -134,9 +147,8 @@ class ORM
 
   def self.where(table_name, filters, order={})
     raise ArgumentError, "Invalid Table Name: #{table_name}" unless self.table_exist?(table_name) && is_valid_table_name?(table_name)
-    
 
-    col_names = get_col_names(filters)
+    col_names = format_col_names(filters)
     values = filters.map do |col_data|
       col_data[:value]
     end
@@ -154,60 +166,78 @@ class ORM
       #{order_str};
     SQL
 
-    result = @@connection.exec_params(sql, values)
-    result = result.map do |res|
-      res
+    begin
+      records = @@db_connection.exec_params(sql, values)
+    rescue PG::Error => error
+      raise error
     end
-    
-    result.size == 0 ? 
-      "No results found with the provided data." :
-      result
+
+    records = self.process_records(records)
+    records.size == 0 ? 
+      "No records found with the provided data." :
+      records
   end
 
   def self.update(table_name, values_to_update, condition)
     raise ArgumentError, "Invalid Table Name: #{table_name}" unless self.table_exist?(table_name) && is_valid_table_name?(table_name)
 
-    col_names_to_update = get_col_names(values_to_update)
-    col_names_condition = get_col_names(condition)
-
     all_values = [values_to_update, condition].flatten
     values = all_values.map do |col_data|
       col_data[:value]
     end
+
+    col_names_to_update = format_col_names(values_to_update)
+    col_names_condition = format_col_names(condition)
+
     all_values_placeholders = create_placeholders(all_values)
+
     to_update_place_holder, condition_place_holder = all_values_placeholders
 
     to_update_key_val_str = format_key_placeholder_str(col_names_to_update, to_update_place_holder)
+
     condition_key_val_str = format_key_placeholder_str(col_names_condition, condition_place_holder)
 
     set_str = format_set_statement(to_update_key_val_str)
     where_str = format_where_statement(condition_key_val_str)
+    
     sql = <<~SQL
       UPDATE \"#{table_name}\" #{set_str}
       #{where_str};
     SQL
 
-    result = @@connection.exec_params(sql, values)
-    p 'Updated!'
-  end
+    begin
+      @@db_connection.exec_params(sql, values)
+    rescue PG::Error => error
+      raise error
+    end
 
+    p 'Successfully Updated Records!'
+  end
 
   def self.delete(table_name, values_to_delete)
     raise ArgumentError, "Invalid Table Name: #{table_name}" unless self.table_exist?(table_name) && is_valid_table_name?(table_name)
 
-    col_name = get_col_names(values_to_delete)
+    col_name = format_col_names(values_to_delete)
+
     value = values_to_delete.map do |col_data|
       col_data[:value]
     end
+
     value_placeholder = create_placeholders(values_to_delete)
     key_val_str = format_key_placeholder_str(col_name, value_placeholder)
+
     where_str = format_where_statement(key_val_str)
 
     sql = <<~SQL
       DELETE FROM \"#{table_name}\" #{where_str}
     SQL
 
-    result = @@connection.exec_params(sql, value)
+    begin
+      result = @@db_connection.exec_params(sql, value)
+    rescue PG::Error => error
+      raise error
+    end
+
     p 'Row Deleted!'
   end
 
@@ -218,22 +248,48 @@ class ORM
       DELETE FROM \"#{table_name}\"
     SQL
 
-    @@connection.exec_params(sql, [])
+    begin
+      @@db_connection.exec_params(sql, [])
+    rescue PG::Error => error
+      raise error
+    end
+    
     p "All Rows Deleted!"
   end
 
+  def self.create_placeholders(data)
+    num = 0
+    data.map do |column_data|
+      if column_data[:value]
+        num += 1
+      end
+      "$#{num}"
+    end
+  end
+
+  def self.process_records(records)
+    records.map do |rec|
+      result = {}
+      rec.each_pair do |key, value|
+        sym_key = key.to_sym
+        result[sym_key] = value
+      end
+      result
+    end
+  end
+
   def self.get_adapter_class(adapter_name)
-    raise ArgumentError, "Unsupported adapter: #{adapter_name}" unless self.is_supported_adapter(adapter_name)
+    raise ArgumentError, "Unsupported adapter: #{adapter_name}" unless self.is_supported_adapter?(adapter_name)
     SUPPORTED_ADAPTERS[adapter_name]
   end
 
-  def self.is_supported_adapter(adapter_name)
+  def self.is_supported_adapter?(adapter_name)
     SUPPORTED_ADAPTERS.key?(adapter_name)
   end
 
   def self.db_exists?(dbname)
     begin
-      @@connection = PG.connect(dbname: dbname)
+      @@db_connection = PG.connect(dbname: dbname)
     rescue PG::ConnectionBad => error
       return false if error.message
       raise error
@@ -246,7 +302,7 @@ class ORM
       sql = <<~SQL
       SELECT * FROM \"#{table_name}\"
     SQL
-    table = @@connection.exec_params(sql, [])
+    table = @@db_connection.exec_params(sql, [])
     rescue PG::UndefinedTable => error
       return false if error.message
       raise error
@@ -307,20 +363,10 @@ class ORM
         result.push("#{col_names[index]} = #{placeholders[index]}")
       end
     end
-    return result
+    result
   end
 
-  def self.create_placeholders(data)
-    num = 0
-    data.map do |column_data|
-      if column_data[:value]
-        num += 1
-      end
-      "$#{num}"
-    end
-  end
-
-  def self.get_col_names(data)
+  def self.format_col_names(data)
     data.map do |column_data|
       "\"#{column_data[:col_name]}\""
     end
