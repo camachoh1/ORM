@@ -33,8 +33,8 @@ Replace "your_database_name" with the actual name of your database.
 2. **Create a Table:**
 
 ```ruby
-Person.create_table(
-  'persons', [
+Person.db.create_table(
+  [
     {col_name: "name", type: 'varchar(50)', not_null: true},
     {col_name: "age", type: "INTEGER", not_null: true}
   ]
@@ -48,7 +48,7 @@ This creates a table named 'persons' with columns 'name' (string) and 'age' (int
 * **Create:**
 
 ```ruby
-Person.create("persons", [
+Person.db.create([
   {col_name: "name", value: "John Doe"},
   {col_name: "age", value: 30}
 ])
@@ -58,19 +58,19 @@ Person.create("persons", [
 
 ```ruby
 # Get all persons
-all_persons = Person.all("persons")
+all_persons = Person.db.all
 
 # Find a person by name
-person = Person.find_by("persons", "name", "John Doe")
+person = Person.db.find_by("name", "John Doe")
 
 # Find persons with specific criteria (and sort)
-persons = Person.where("persons", [{col_name: "age", value: 25}], {by: "name", order: "asc"})
+persons = Person.db.where([{col_name: "age", value: 25}], {by: "name", order: "asc"})
 ```
 
 * **Update:**
 
 ```ruby
-Person.update("persons", [
+Person.db.update([
   {col_name: "name", value: "Jane Doe"},
 ], [{col_name: "id", value: 1}])
 ```
@@ -79,8 +79,8 @@ Person.update("persons", [
 
 ```ruby
 # Delete a person by ID
-Person.delete("persons", [{col_name: "id", value: 1}])
+Person.db.delete([{col_name: "id", value: 1}])
 
 # Delete all persons from the table
-Person.delete_all("persons")
+Person.db.delete_all
 ```
