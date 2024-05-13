@@ -69,38 +69,3 @@ class ORM
     true
   end
 end
-
-
-class Person < ORM
-end
-
-# Person.establish_db_connection(:postgres, "db_test_orm")
-# Person.db.create_table(
-#   [
-#     {col_name: "name", type: 'varchar(50)', not_null: true},
-#     {col_name: "age", type: "INTEGER", not_null: true}
-#   ]
-# );
-
-
-
-# Person.db.create([
-#   {col_name: "name", value: "John Doe"},
-#   {col_name: "age", value: 30}
-# ])
-
-
-# p all_persons = Person.db.all
-
-# # Find a person by name
-# p person = Person.db.find_by("id", 16)
-
-# persons = Person.db.where([{col_name: "age", value: 30}], {by: "name", order: "asc"})
-
-# p persons
-
-# Person.db.update([
-#   {col_name: "name", value: "Jane Doe"},
-# ], [{col_name: "id", value: 16}])
-
-# p all_persons = Person.db.all
