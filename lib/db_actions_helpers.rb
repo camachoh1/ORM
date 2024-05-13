@@ -40,6 +40,8 @@ module DatabaseActionsHelpers
   end
 
   def format_key_placeholder_str(col_names, placeholders)
+    placeholders = placeholders.is_a?(Array) ? placeholders[0] : placeholders
+
     result = []
     if col_names.size == 1 && placeholders =~ /[\$d+]/
       result.push("#{col_names[0]} = #{placeholders}")

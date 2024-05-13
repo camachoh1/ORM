@@ -7,15 +7,13 @@ SUPPORTED_ADAPTERS = {
 }
 
 class ORM
+  @@db_connection = nil
   @@table_name = nil
   @@defaultdb = 'postgres'
   @@config = {
     adapter: PG,  # Default adapter
     dbname: @@defaultdb
   }
-
-  # Connection object
-  @@db_connection = nil
 
   def self.db #
     @@table_name = self.to_s.downcase + 's'
@@ -32,13 +30,15 @@ class ORM
   def self.connect
     if @@db_connection.nil?
       adapter_class = @@config[:adapter]
-      @@db_connection = adapter_class.connect(dbname: @@defaultdb)
+      temp_connection = adapter_class.connect(dbname: @@defaultdb)
 
       if !self.db_exists?(@@config[:dbname])
-        @@db_connection.exec("CREATE DATABASE \"#{@@config[:dbname]}\";")
+        temp_connection.exec("CREATE DATABASE \"#{@@config[:dbname]}\";")
   
         puts "Database '#{@@config[:dbname]}' created!"
       end
+
+      temp_connection.close if temp_connection
 
       @@db_connection = adapter_class.connect(dbname: @@config[:dbname])
 
@@ -58,11 +58,49 @@ class ORM
 
   def self.db_exists?(dbname)
     begin
-      @@db_connection = PG.connect(dbname: dbname)
+      temp_connection = PG.connect(dbname: dbname)
+      temp_connection.exec("SELECT 1")
     rescue PG::ConnectionBad => error
       return false if error.message
       raise error
+    ensure
+      temp_connection&.close if temp_connection
     end
     true
   end
 end
+
+
+class Person < ORM
+end
+
+# Person.establish_db_connection(:postgres, "db_test_orm")
+# Person.db.create_table(
+#   [
+#     {col_name: "name", type: 'varchar(50)', not_null: true},
+#     {col_name: "age", type: "INTEGER", not_null: true}
+#   ]
+# );
+
+
+
+# Person.db.create([
+#   {col_name: "name", value: "John Doe"},
+#   {col_name: "age", value: 30}
+# ])
+
+
+# p all_persons = Person.db.all
+
+# # Find a person by name
+# p person = Person.db.find_by("id", 16)
+
+# persons = Person.db.where([{col_name: "age", value: 30}], {by: "name", order: "asc"})
+
+# p persons
+
+# Person.db.update([
+#   {col_name: "name", value: "Jane Doe"},
+# ], [{col_name: "id", value: 16}])
+
+# p all_persons = Person.db.all
