@@ -96,7 +96,6 @@ class DatabaseActions
     end
 
     records = process_records(records)
-    p records
     if records.size == 0
       "Unable to find provided data!"
     else 
@@ -162,14 +161,13 @@ class DatabaseActions
       UPDATE \"#{@table_name}\" #{set_str}
       #{where_str};
     SQL
-    p values
     begin
       @db_connection.exec_params(sql, values)
     rescue PG::Error => error
       raise error
     end
 
-    p 'Successfully Updated Records!'
+    'Successfully Updated Records!'
   end
 
   def delete(values_to_delete)
@@ -194,7 +192,7 @@ class DatabaseActions
       raise error
     end
 
-    p 'Row Deleted!'
+    'Row Deleted!'
   end
 
   def delete_all()
@@ -208,7 +206,7 @@ class DatabaseActions
       raise error
     end
     
-    p "All Rows Deleted!"
+    "All Rows Deleted!"
   end
 
   def table_exist?(table_name) 
