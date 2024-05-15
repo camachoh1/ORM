@@ -1,7 +1,6 @@
 require_relative './db_actions'
 require 'pg'
 
-
 SUPPORTED_ADAPTERS = {
   postgres: PG,
 }
@@ -61,10 +60,10 @@ class ORM
       temp_connection = PG.connect(dbname: dbname)
       temp_connection.exec("SELECT 1")
     rescue PG::ConnectionBad => error
-      return false if error.message
+      return false if error
       raise error
     ensure
-      temp_connection&.close if temp_connection
+      temp_connection.close if temp_connection
     end
     true
   end

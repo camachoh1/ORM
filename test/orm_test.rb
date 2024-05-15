@@ -55,86 +55,64 @@ class OrmTest < Minitest::Test
   end
 
   def test_all
-    sql = <<~SQL
-      INSERT INTO persons (name, age)
-      VALUES ('Jane Doe', 25)
-    SQL
-    @db.exec(sql)
+    create_dummy_data
+
     all_persons = @person.db.all
-    assert_equal(1, all_persons.size)
+    assert_equal(3, all_persons.size)
   end
 
   def test_first
-    sql = <<~SQL
-      INSERT INTO persons (id,name, age)
-      VALUES (20,'John Doe', 25)
-    SQL
-    @db.exec(sql)
-    first = @person.db.first(1)
+    create_dummy_data
 
-    assert_equal([{:id=>"20", :name=>"John Doe", :age=>"25"}], first)
+    first = @person.db.first(2)
+
+    assert_equal([
+      {:id=>"1", :name=>"John Doe", :age=>"30"},
+      {:id=>"2", :name=>"Jane Doe", :age=>"30"}
+    ], first)
   end
 
   def test_find_by
-    sql = <<~SQL
-    INSERT INTO persons (id,name, age)
-    VALUES (20,'John Doe', 25)
-  SQL
-  @db.exec(sql)
-    person = @person.db.find_by("id", "20")
+    create_dummy_data
 
-    assert_equal([{:id=>"20", :name=>"John Doe", :age=>"25"}], person)
+    person = @person.db.find_by("id", "3")
+
+    assert_equal([{:id=>"3", :name=>"Bob Doe", :age=>"40"}], person)
   end
 
   def test_where
-    sql = <<~SQL
-    INSERT INTO persons (id,name, age)
-    VALUES (20,'John Doe', 30),
-            (21,'Jane Doe', 30);
-    SQL
-  @db.exec(sql)
+    create_dummy_data
+
     persons = @person.db.where([{col_name: "age", value: 30}], {by: "id", order: "desc"})
 
     assert_equal([
-      {:id=>"21", :name=>"Jane Doe", :age=>"30"},
-      {:id=>"20", :name=>"John Doe", :age=>"30"}
+      {:id=>"2", :name=>"Jane Doe", :age=>"30"},
+      {:id=>"1", :name=>"John Doe", :age=>"30"}
     ], persons)
   end
 
   def test_update
-    sql = <<~SQL
-    INSERT INTO persons (id,name, age)
-    VALUES (1,'John Doe', 30),
-            (2,'Jane Doe', 30);
-    SQL
-  @db.exec(sql)
+    create_dummy_data
+
     @person.db.update([
-      {col_name: "name", value: "Bob Doe"},
+      {col_name: "name", value: "Rob Doe"},
     ], [{col_name: "id", value: 1}])
 
     first = @person.db.first(1)
-    assert_equal([{:id=>"1", :name=>"Bob Doe", :age=>"30"}], first)
+    assert_equal([{:id=>"1", :name=>"Rob Doe", :age=>"30"}], first)
   end
 
   def test_delete
-    sql = <<~SQL
-    INSERT INTO persons (id,name, age)
-    VALUES (1,'John Doe', 30),
-            (2,'Jane Doe', 30);
-    SQL
-  @db.exec(sql)
+    create_dummy_data
+
     @person.db.delete([{col_name: "id", value: 1}])
     all_persons = @person.db.all
-    assert_equal(1, all_persons.size)
+    assert_equal(2, all_persons.size)
   end
 
   def test_delete_all
-    sql = <<~SQL
-    INSERT INTO persons (id,name, age)
-    VALUES (1,'John Doe', 30),
-            (2,'Jane Doe', 30);
-    SQL
-  @db.exec(sql)
+    create_dummy_data
+
     @person.db.delete_all
     all_persons = @person.db.all
     assert_equal(0, all_persons.size)
@@ -153,4 +131,14 @@ class OrmTest < Minitest::Test
       ]
     )
   end
+
+  def create_dummy_data
+    sql = <<~SQL
+    INSERT INTO persons (id,name, age)
+    VALUES (1,'John Doe', 30),
+            (2,'Jane Doe', 30),
+            (3,'Bob Doe', 40);
+    SQL
+    @db.exec(sql)
+  end 
 end

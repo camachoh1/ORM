@@ -1,7 +1,7 @@
 require_relative './db_actions_helpers'
 class DatabaseActions
   include DatabaseActionsHelpers
-  attr_accessor :db_connection
+  attr_reader :db_connection
   def initialize(db_connection, table_name)
     @db_connection = db_connection
     @table_name = table_name
@@ -97,7 +97,8 @@ class DatabaseActions
 
     records = process_records(records)
     if records.size == 0
-      "Unable to find provided data!"
+      p "Unable to find provided data!"
+      records
     else 
       records
     end
